@@ -5,7 +5,7 @@ python centralize_test/main_cvae.py \
     --lr_scheduler_type by_step \
     --lr_decay_rate 1.0 \
     --step_size 2 \
-    --batch_size 64 \
+    --batch_size 512 \
     --epochs 1000 \
     --seed 1234 \
     --modalities image sound trajectory \

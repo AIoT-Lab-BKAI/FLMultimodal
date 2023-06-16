@@ -1,8 +1,6 @@
 import argparse
 from benchmark.mhd_reduce_classification.dataset import MHDReduceDataset
 from benchmark.mhd_reduce_classification.model.cvae import Model
-# from benchmark.mhd_classification.dataset import MHDDataset
-# from benchmark.mhd_classification.model.vae import Model
 import torch
 from torch.utils.data import DataLoader
 from utils.fflow import setup_seed
@@ -10,8 +8,6 @@ import numpy as np
 from tqdm.auto import tqdm
 import wandb
 from sklearn.metrics import accuracy_score
-from torch.utils.data import Subset
-import json
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', help='learning rate;', type=float)
@@ -30,12 +26,7 @@ option = vars(parser.parse_args())
 print(option)
 setup_seed(option['seed'])
 trainset = MHDReduceDataset(train=True)
-with open('./fedtask/mhd_reduce_classification_cnum50_dist0_skew0_seed0_missing/data.json', 'r') as f:
-    indices = json.load(f)['Client00']['dtrain']
-trainset = Subset(trainset, indices)
 testset = MHDReduceDataset(train=False)
-# trainset = MHDDataset(train=True)
-# testset = MHDDataset(train=False)
 train_loader = DataLoader(trainset, batch_size=option['batch_size'], shuffle=True)
 test_loader = DataLoader(testset, batch_size=option['batch_size'], shuffle=False)
 
@@ -55,6 +46,8 @@ else:
 
 experiment_key = "+".join(option['modalities']) if option['modalities'] else "image+sound+trajectory"
 
+prev_total_loss = np.inf
+curr_total_loss = 0.0
 if option['wandb']:
     wandb.init(
         entity="aiotlab",
@@ -97,22 +90,28 @@ if option['wandb']:
                 x = {modal: tensor.to(device) for modal, tensor in batch[0].items()}
             y = batch[1].to(device)
             loss = model.forward_details(x, y)
+            curr_total_loss += sum(loss.values()).item() * batch[1].shape[0]
             for key, value in loss.items():
                 step_log['test_{}'.format(key)] += value * batch[1].shape[0]
-            x = {modal: tensor.to(device) for modal, tensor in batch[0].items()}
-            predict = model.predict_more(x, mean=True, mc_n_list=[1, 5, 10])
-            for key, value in predict.items():
-                if key not in test_predict.keys():
-                    test_predict[key] = list()
-                test_predict[key].extend(value.tolist())
+            # x = {modal: tensor.to(device) for modal, tensor in batch[0].items()}
+            # predict = model.predict_more(x, mean=True, mc_n_list=[1, 5, 10])
+            # for key, value in predict.items():
+            #     if key not in test_predict.keys():
+            #         test_predict[key] = list()
+            #     test_predict[key].extend(value.tolist())
     for key, value in step_log.items():
         if key.startswith('train'):
             step_log[key] = value / len(trainset)
         else:
             step_log[key] = value / len(testset)
-    for key, value in test_predict.items():
-        step_log['test_{}_acc'.format(key)] = accuracy_score(testset.labels, np.array(value))
+    # for key, value in test_predict.items():
+    #     step_log['test_{}_acc'.format(key)] = accuracy_score(testset.labels, np.array(value))
     wandb.log(step_log)
+    curr_total_loss /= len(testset)
+    if curr_total_loss < prev_total_loss:
+        torch.save(model.state_dict(), './centralize_test/cvae.pt')
+    prev_total_loss = curr_total_loss
+    curr_total_loss = 0.0
 for epoch in range(option['epochs']):
     model.train()
     for batch in tqdm(train_loader, desc='Epoch {}: Train'.format(epoch + 1)):
@@ -166,19 +165,25 @@ for epoch in range(option['epochs']):
                     x = {modal: tensor.to(device) for modal, tensor in batch[0].items()}
                 y = batch[1].to(device)
                 loss = model.forward_details(x, y)
+                curr_total_loss += sum(loss.values()).item() * batch[1].shape[0]
                 for key, value in loss.items():
                     step_log['test_{}'.format(key)] += value * batch[1].shape[0]
-                x = {modal: tensor.to(device) for modal, tensor in batch[0].items()}
-                predict = model.predict_more(x, mean=True, mc_n_list=[1, 5, 10])
-                for key, value in predict.items():
-                    if key not in test_predict.keys():
-                        test_predict[key] = list()
-                    test_predict[key].extend(value.tolist())
+                # x = {modal: tensor.to(device) for modal, tensor in batch[0].items()}
+                # predict = model.predict_more(x, mean=True, mc_n_list=[1, 5, 10])
+                # for key, value in predict.items():
+                #     if key not in test_predict.keys():
+                #         test_predict[key] = list()
+                #     test_predict[key].extend(value.tolist())
         for key, value in step_log.items():
             if key.startswith('train'):
                 step_log[key] = value / len(trainset)
             else:
                 step_log[key] = value / len(testset)
-        for key, value in test_predict.items():
-            step_log['test_{}_acc'.format(key)] = accuracy_score(testset.labels, np.array(value))
+        # for key, value in test_predict.items():
+        #     step_log['test_{}_acc'.format(key)] = accuracy_score(testset.labels, np.array(value))
         wandb.log(step_log)
+        curr_total_loss /= len(testset)
+        if curr_total_loss < prev_total_loss:
+            torch.save(model.state_dict(), './centralize_test/cvae.pt')
+        prev_total_loss = curr_total_loss
+        curr_total_loss = 0.0
