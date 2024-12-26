@@ -51,7 +51,7 @@ def run(input_folder, label_folder):
     print(gid, len(all_gts))
 
 if __name__=='__main__':
-    temp_folder = './benchmark/RAW_DATA/SLEEP_EDF/_temp'
+    temp_folder = './benchmark/RAW_DATA/SLEEP_EDF/_temp_cassette'
     out_folder = './benchmark/RAW_DATA/SLEEP_EDF/final_data'
     
     os.makedirs(out_folder, exist_ok=True)
