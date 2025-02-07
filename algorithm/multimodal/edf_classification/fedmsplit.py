@@ -7,34 +7,18 @@ import utils.fflow as flw
 import os
 import torch
 import numpy as np
-import wandb
 
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        self.n_leads = 12
-        # self.list_testing_leads = [
-        #     [2, 6, 10],                         #1
-        #     [1, 2, 6, 10, 11],                  #2
-        #     [1, 2, 6, 9, 10],                   #3
-        #     [2, 4, 5, 9, 10, 11],               #4
-        #     [2, 3, 4, 5, 6, 7, 9, 10, 11],      #5
-        #     [2, 4, 5, 6, 7, 8, 9, 11],          #6
-        #     [0, 1, 2, 4, 5, 6, 7, 8, 9, 11]     #7
-        # ]
+        self.n_leads = 5
         self.list_testing_leads = [
-            [2, 8],                             #1
-            [0, 3, 8],                          #2
-            [0, 2, 3, 8, 10],                   #3
-            [0, 1, 3, 5, 8, 11],                #4
-            [2, 5, 6, 7, 8, 9, 11],             #5
-            [1, 2, 3, 4, 5, 6, 7, 8, 11],       #6
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 11],    #7
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]     #8
-
+            [1],                             #1
+            [1, 3],                          #2
+            [0, 1, 3],                   #3
+            [0, 1, 2, 3],                #4
+            [0, 1, 2, 3, 4],             #5
         ]
-        self.checkpoints_dir = os.path.join('fedtask', option['task'], 'checkpoints')
-        os.makedirs(self.checkpoints_dir, exist_ok=True)
 
     def run(self):
         """
@@ -68,26 +52,6 @@ class Server(BasicServer):
         flw.logger.save_output_as_json()
         return
 
-    def save_checkpoints(self):
-        print("Saving global model checkpoints!")
-        if not os.path.exists(os.path.join(self.checkpoints_dir, 'global-model')):
-            os.makedirs(os.path.join(self.checkpoints_dir, 'global-model'), exist_ok=True)
-        # torch.save(self.model.feature_extractors.state_dict(), os.path.join(self.checkpoints_dir, 'global-model', 'feature_extractor.pt'))
-        # torch.save(self.model.branchallleads_classifier.state_dict(), os.path.join(self.checkpoints_dir, 'global-model', 'classifier.pt'))
-        torch.save(self.model.state_dict(), os.path.join(self.checkpoints_dir, 'global-model', 'model.pt'))
-
-        # if flw.logger.output['test_2_loss'][-1] == min(flw.logger.output['test_2_loss']):
-        #     os.makedirs(os.path.join(self.checkpoints_dir, 'missing-modal'), exist_ok=True)
-        #     print("Saving missing-modal model checkpoints!")
-        #     torch.save(self.model.branch2leads.state_dict(), os.path.join(self.checkpoints_dir, 'missing-modal', 'feature_extractor.pt'))
-        #     torch.save(self.model.branch2leads_classifier.state_dict(), os.path.join(self.checkpoints_dir, 'missing-modal', 'classifier.pt'))
-
-    def load_checkpoints(self):
-        if os.path.exists(os.path.join(self.checkpoints_dir, 'global-model')):
-            print("Loading global model checkpoints!")
-            self.model.load_state_dict(torch.load(os.path.join(self.checkpoints_dir, 'global-model', 'model.pt')))
-
-
     def iterate(self):
         """
         The standard iteration of each federated round that contains three
@@ -101,15 +65,12 @@ class Server(BasicServer):
         conmmunitcation_result = self.communicate(self.selected_clients)
         models = conmmunitcation_result['model']
         modalities_list = conmmunitcation_result['modalities']
-        # if wandb.run.resumed:
-        #     self.load_checkpoints()
         self.model = self.aggregate(models, modalities_list)
-        # self.save_checkpoints()
         return
 
     @torch.no_grad()
     def aggregate(self, models: list, modalities_list: list):
-        print("Calculating clients' aggregated models ...")
+        # print("Calculating clients' aggregated models ...")
         n_models = len(models)
         for k in range(n_models):
             self.clients[self.selected_clients[k]].agg_model = copy.deepcopy(self.model)
@@ -137,7 +98,7 @@ class Server(BasicServer):
             att_mat = torch.softmax(params.matmul(params.T) / np.sqrt(dim), dim=1)
             for idk, k in enumerate(modal_dict[m]):
                 for idl, l in enumerate(modal_dict[m]):
-                    A[m, k, l] = att_mat[idk, idl]  
+                    A[m, k, l] = att_mat[idk, idl]
         # classifier
         params = torch.stack([
             torch.cat([
@@ -150,7 +111,6 @@ class Server(BasicServer):
         for k in range(n_models):
             for l in range(n_models):
                 A[-1, k, l] = att_mat[k, l]
-        global_relation_embedders = []
         for m in range(self.n_leads):
             for k in modal_dict[m]:
                 self.clients[self.selected_clients[k]].local_model.feature_extractors[m] = fmodule._model_sum([
@@ -159,13 +119,6 @@ class Server(BasicServer):
                 ]) / sum([
                     A[m, k, l] * A[:, k, l].abs().sum() / d_q[k, l] for l in modal_dict[m]
                 ])
-        for m in range(self.n_leads):
-            global_relation_embedders.append(fmodule._model_average([
-                self.clients[self.selected_clients[k]].local_model.relation_embedders[m] for k in self.selected_clients
-            ])    )
-        for k in range(n_models):    
-            for m in range(self.n_leads):
-                self.clients[self.selected_clients[k]].local_model.relation_embedders[m] = global_relation_embedders[m]
         for k in range(n_models):
             self.clients[self.selected_clients[k]].local_model.classifier = fmodule._model_sum([
                 self.clients[self.selected_clients[l]].local_model.classifier * \
@@ -182,7 +135,6 @@ class Server(BasicServer):
             new_model.feature_extractors[m] = fmodule._model_average([
                 self.clients[self.selected_clients[l]].local_model.feature_extractors[m] for l in modal_dict[m]
             ])
-            new_model.relation_embedders[m] = global_relation_embedders[m]
         new_model.classifier = fmodule._model_average([
             self.clients[self.selected_clients[l]].local_model.classifier for l in range(n_models)
         ])
@@ -203,8 +155,7 @@ class Server(BasicServer):
                 model=model,
                 dataset=self.test_data,
                 batch_size=self.option['test_batch_size'],
-                leads=self.list_testing_leads,
-                contrastive_weight=self.option['contrastive_weight']
+                leads=self.list_testing_leads
             )
         else:
             return None
@@ -231,7 +182,6 @@ class Client(BasicClient):
         super(Client, self).__init__(option, name, train_data, valid_data)
         self.n_leads = 5
         self.fedmsplit_prox_lambda = option['fedmsplit_prox_lambda']
-        self.contrastive_weight = option['contrastive_weight']
         self.modalities = modalities
         self.local_model = None
         self.agg_model = None
@@ -300,8 +250,7 @@ class Client(BasicClient):
             loss, outputs = self.calculator.train_one_step(
                 model=model,
                 data=batch_data,
-                leads=self.modalities,
-                contrastive_weight=self.contrastive_weight
+                leads=self.modalities
             )['loss']
             regular_loss = 0.0
             if self.fedmsplit_prox_lambda > 0.0:
@@ -332,6 +281,5 @@ class Client(BasicClient):
         return self.calculator.test(
             model=model,
             dataset=dataset,
-            leads=self.modalities,
-            contrastive_weight=self.contrastive_weight
+            leads=self.modalities
         )

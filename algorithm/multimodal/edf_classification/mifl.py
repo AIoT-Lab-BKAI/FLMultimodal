@@ -12,29 +12,14 @@ import wandb
 class Server(BasicServer):
     def __init__(self, option, model, clients, test_data = None):
         super(Server, self).__init__(option, model, clients, test_data)
-        self.n_leads = 12
-        # self.list_testing_leads = [
-        #     [2, 6, 10],                         #1
-        #     [1, 2, 6, 10, 11],                  #2
-        #     [1, 2, 6, 9, 10],                   #3
-        #     [2, 4, 5, 9, 10, 11],               #4
-        #     [2, 3, 4, 5, 6, 7, 9, 10, 11],      #5
-        #     [2, 4, 5, 6, 7, 8, 9, 11],          #6
-        #     [0, 1, 2, 4, 5, 6, 7, 8, 9, 11]     #7
-        # ]
+        self.n_leads = 5
         self.list_testing_leads = [
-            [2, 8],                             #1
-            [0, 3, 8],                          #2
-            [0, 2, 3, 8, 10],                   #3
-            [0, 1, 3, 5, 8, 11],                #4
-            [2, 5, 6, 7, 8, 9, 11],             #5
-            [1, 2, 3, 4, 5, 6, 7, 8, 11],       #6
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 11],    #7
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]     #8
-
+            [1],                             #1
+            [1, 3],                          #2
+            [0, 1, 3],                   #3
+            [0, 1, 2, 3],                #4
+            [0, 1, 2, 3, 4],             #5
         ]
-        self.checkpoints_dir = os.path.join('fedtask', option['task'], 'checkpoints')
-        os.makedirs(self.checkpoints_dir, exist_ok=True)
 
     def run(self):
         """
@@ -67,26 +52,7 @@ class Server(BasicServer):
         # save results as .json file
         flw.logger.save_output_as_json()
         return
-
-    def save_checkpoints(self):
-        print("Saving global model checkpoints!")
-        if not os.path.exists(os.path.join(self.checkpoints_dir, 'global-model')):
-            os.makedirs(os.path.join(self.checkpoints_dir, 'global-model'), exist_ok=True)
-        # torch.save(self.model.feature_extractors.state_dict(), os.path.join(self.checkpoints_dir, 'global-model', 'feature_extractor.pt'))
-        # torch.save(self.model.branchallleads_classifier.state_dict(), os.path.join(self.checkpoints_dir, 'global-model', 'classifier.pt'))
-        torch.save(self.model.state_dict(), os.path.join(self.checkpoints_dir, 'global-model', 'model.pt'))
-
-        # if flw.logger.output['test_2_loss'][-1] == min(flw.logger.output['test_2_loss']):
-        #     os.makedirs(os.path.join(self.checkpoints_dir, 'missing-modal'), exist_ok=True)
-        #     print("Saving missing-modal model checkpoints!")
-        #     torch.save(self.model.branch2leads.state_dict(), os.path.join(self.checkpoints_dir, 'missing-modal', 'feature_extractor.pt'))
-        #     torch.save(self.model.branch2leads_classifier.state_dict(), os.path.join(self.checkpoints_dir, 'missing-modal', 'classifier.pt'))
-
-    def load_checkpoints(self):
-        if os.path.exists(os.path.join(self.checkpoints_dir, 'global-model')):
-            print("Loading global model checkpoints!")
-            self.model.load_state_dict(torch.load(os.path.join(self.checkpoints_dir, 'global-model', 'model.pt')))
-
+    
 
     def iterate(self):
         """
@@ -109,7 +75,7 @@ class Server(BasicServer):
 
     @torch.no_grad()
     def aggregate(self, models: list, modalities_list: list):
-        print("Calculating clients' aggregated models ...")
+        # print("Calculating clients' aggregated models ...")
         n_models = len(models)
         for k in range(n_models):
             self.clients[self.selected_clients[k]].agg_model = copy.deepcopy(self.model)
@@ -229,7 +195,7 @@ class Server(BasicServer):
 class Client(BasicClient):
     def __init__(self, option, modalities, name='', train_data=None, valid_data=None):
         super(Client, self).__init__(option, name, train_data, valid_data)
-        self.n_leads = 5
+        self.n_leads = 12
         self.fedmsplit_prox_lambda = option['fedmsplit_prox_lambda']
         self.contrastive_weight = option['contrastive_weight']
         self.modalities = modalities

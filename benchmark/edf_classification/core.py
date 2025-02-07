@@ -1,26 +1,31 @@
-from .dataset import PTBXL_REDUCE_Dataset
+from .dataset import EDFDataset
 from benchmark.toolkits import DefaultTaskGen
 from benchmark.toolkits import ClassificationCalculator
 from benchmark.toolkits import IDXTaskPipe
 import os
-import time
 import ujson
 import importlib
 import random
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from sklearn.metrics import accuracy_score
 import numpy as np
+import json
+import matplotlib.pyplot as plt
+import cv2
+
 import warnings
 warnings.filterwarnings('ignore')
 
 class TaskPipe(IDXTaskPipe):
+
     @classmethod
     def load_task(cls, task_path):
         with open(os.path.join(task_path, 'data.json'), 'r') as inf:
             feddata = ujson.load(inf)
         class_path = feddata['datasrc']['class_path']
         class_name = feddata['datasrc']['class_name']
+        
         origin_class = getattr(importlib.import_module(class_path), class_name)
         origin_train_data = cls.args_to_dataset(origin_class, feddata['datasrc']['train_args'])
         origin_test_data = cls.args_to_dataset(origin_class, feddata['datasrc']['test_args'])
@@ -29,10 +34,10 @@ class TaskPipe(IDXTaskPipe):
         valid_datas = []
         modalities_list = []
         for name in feddata['client_names']:
-            import pdb; pdb.set_trace()
-            train_data = feddata[name]['dtrain']
+            # import pdb; pdb.set_trace()
+            train_data = feddata[name]['dtrain']    # sample idx
             valid_data = feddata[name]['dvalid']
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             if cls._cross_validation:
                 k = len(train_data)
                 train_data.extend(valid_data)
@@ -90,7 +95,6 @@ def save_task(generator):
         ujson.dump(feddata, outf, default=convert)
     return
     
-
 def convert(o):
     if isinstance(o, np.int64): return int(o)  
     raise TypeError
@@ -223,27 +227,16 @@ def iid_partition(generator):
             local_datas[i] += idxs.tolist()
     # import pdb; pdb.set_trace()
     return local_datas
-
-# def local_holdout(self, local_datas, shuffle=False):
-#         """split each local dataset into train data and valid data according the rate."""
-#         train_cidxs = []
-#         valid_cidxs = []
-#         for local_data in local_datas:
-#             if shuffle:
-#                 np.random.shuffle(local_data)
-#             k = int(len(local_data) * (1-self.local_holdout_rate))
-#             train_cidxs.append(local_data[:k])
-#             valid_cidxs.append(local_data[k:])
-#         return train_cidxs, valid_cidxs
     
 
 class TaskGen(DefaultTaskGen):
-    def __init__(self, dist_id, num_clients=1, skewness=0.5, local_hld_rate=0.0, seed=0, missing_1_6=False, missing_all_6=False, missing_1_12=False, missing_7_12=False, missing_rate=-1, missing_ratio_2_modal=-1):
-        super(TaskGen, self).__init__(benchmark='ptbxl_reduce_classification',
+    def __init__(self, dist_id, num_clients=1, skewness=0.5, local_hld_rate=0.0, seed=0, 
+                 percentages=None, missing_1_3=False, missing_1_5=False, missing_3_5=False):
+        super(TaskGen, self).__init__(benchmark='edf_classification',
                                       dist_id=dist_id,
                                       num_clients=num_clients,
                                       skewness=skewness,
-                                      rawdata_path='./benchmark/RAW_DATA/PTBXL_REDUCE',
+                                      rawdata_path='benchmark/RAW_DATA/SLEEP_EDF/final_data',
                                       local_hld_rate=local_hld_rate,
                                       seed = seed
                                       )
@@ -253,17 +246,16 @@ class TaskGen(DefaultTaskGen):
             self.partition = iid_partition
         # self.local_holdout = local_holdout
         self.num_classes = 5
-        # self.num_classes = 4
         self.save_task = save_task
         self.visualize = self.visualize_by_class
         self.source_dict = {
-            'class_path': 'benchmark.ptbxl_reduce_classification.dataset',
-            'class_name': 'PTBXL_REDUCE_Dataset',
+            'class_path': 'benchmark.edf_classification.dataset',
+            'class_name': 'EDFDataset',
             'train_args': {
                 'root': '"'+self.rawdata_path+'"',
                 'download': 'True',
                 'standard_scaler': 'True',
-                'train':'True'
+                'train':'True',
             },
             'test_args': {
                 'root': '"'+self.rawdata_path+'"',
@@ -272,40 +264,39 @@ class TaskGen(DefaultTaskGen):
                 'train': 'False'
             }
         }
-        self.missing_1_6 = missing_1_6
-        self.missing_all_6 = missing_all_6
-        self.missing_1_12 = missing_1_12
-        self.missing_7_12 = missing_7_12
+        
+        self.missing_1_3 = missing_1_3
+        self.missing_1_5 = missing_1_5
+        self.missing_3_5 = missing_3_5
         self.specific_training_leads = None
         self.local_holdout_rate = 0.1
-        if self.missing_all_6:
-            self.specific_training_leads = [(3, 6, 2, 7, 5, 1), (11, 2, 10, 9, 6, 1), (10, 0, 9, 6, 3, 5), (2, 1, 9, 5, 7, 6), (7, 11, 10, 8, 4, 5), 
-                                            (8, 9, 11, 7, 2, 10), (4, 11, 3, 0, 6, 2), (2, 0, 5, 9, 10, 11), (11, 6, 3, 9, 8, 2), (10, 9, 5, 7, 4, 11), 
-                                            (4, 1, 7, 2, 11, 10), (10, 1, 2, 4, 8, 9), (2, 4, 7, 0, 5, 10), (9, 10, 5, 6, 7, 1), (1, 4, 10, 8, 6, 11), 
-                                            (2, 9, 0, 6, 10, 1), (11, 9, 2, 5, 7, 4), (9, 4, 7, 8, 10, 5), (6, 11, 7, 1, 2, 9), (11, 5, 7, 9, 4, 2)]
-            self.taskname = self.taskname + '_missing_all_6'
-            self.taskpath = os.path.join(self.task_rootpath, self.taskname)
-        elif self.missing_1_12:
-            self.specific_training_leads = [(5,), (10, 2), (2, 9, 10), (0, 9, 7, 3), (3, 9, 5, 8, 10), 
-                                            (1, 7, 8, 5, 2, 10), (4, 0, 6, 11, 10, 5, 3), (4, 1, 3, 10, 9, 11, 0, 2), (3, 2, 8, 10, 0, 1, 9, 4, 6), (10, 3, 0, 1, 8, 9, 11, 7, 4, 6), 
-                                            (0, 1, 3, 8, 7, 9, 5, 6, 2, 10, 4), (8, 7, 1, 5, 2, 11, 6, 3, 0, 4, 9, 10), (8,), (3, 7, 1, 11, 10), (10, 1), 
-                                            (3, 0, 7, 4, 1, 10, 9, 6, 11, 2), (1, 9, 2, 0, 8, 11), (6, 11, 10, 4, 5, 0), (4, 3), (6, 2, 7, 3, 0, 1)]
-            self.taskname = self.taskname + '_missing_1_12'
-            self.taskpath = os.path.join(self.task_rootpath, self.taskname)
-        elif self.missing_7_12:
-            self.specific_training_leads = [(4, 1, 11, 3, 0, 9, 7), (7, 5, 8, 10, 3, 0, 1, 2), (1, 4, 11, 3, 2, 9, 10, 6, 0), (6, 2, 8, 9, 10, 5, 0, 4, 3, 1), (0, 7, 3, 6, 11, 10, 9, 8, 2, 5, 4), 
-                                            (5, 2, 6, 9, 11, 0, 1, 4, 8, 10, 7, 3), (0, 5, 8, 11, 7, 6, 2, 3), (4, 9, 5, 2, 7, 8, 0, 3, 11), (9, 3, 7, 5, 1, 6, 4, 8, 10), (11, 1, 5, 0, 10, 2, 7), 
-                                            (11, 10, 0, 4, 6, 8, 3, 1), (5, 8, 7, 3, 0, 9, 11, 10, 2, 1), (11, 1, 7, 6, 2, 4, 3, 0, 10, 9, 5), (7, 1, 4, 6, 11, 2, 9), (7, 5, 3, 9, 0, 2, 8, 1, 10), 
-                                            (3, 4, 10, 1, 11, 2, 7), (0, 11, 5, 9, 2, 3, 7, 8), (5, 7, 1, 4, 9, 0, 10, 2, 6, 11), (10, 4, 6, 3, 1, 8, 7, 0, 9, 11), (10, 11, 3, 2, 1, 8, 7, 9)]
-            self.taskname = self.taskname + '_missing_7_12'
-            self.taskpath = os.path.join(self.task_rootpath, self.taskname)
-        elif self.missing_1_6:
-            self.specific_training_leads = [(10,), (9, 3), (7, 3, 4), (4, 3, 6, 11), (0, 11, 9, 5, 10), 
-                                            (5, 6, 4, 10, 7, 9), (4,), (9, 1, 11, 8, 5, 6), (1, 10, 9, 7), (3, 6, 1), 
-                                            (1, 8, 11, 7, 4), (7, 10, 9, 4), (4, 5, 10), (5, 3, 1, 6), (0, 4), 
-                                            (11, 6, 2, 7, 9, 10), (0, 7, 6), (7,), (0, 9), (11, 1, 4, 0, 9, 7)]
-            self.taskname = self.taskname + '_missing_1_6'
-            self.taskpath = os.path.join(self.task_rootpath, self.taskname)
+
+        if self.missing_1_3:
+            self.specific_training_leads =  [(2,), (0, 2), (1, 0, 4), (2, 3), (4,), 
+                                            (2, 4), (3,), (0,), (1,), (4, 1), 
+                                            (1, 4, 0), (1, 2, 0), (4, 3), (4, 3, 0), (2, 1), 
+                                            (0, 3), (0, 4), (1, 4), (1, 4, 3), (4, 3, 2), 
+                                            (3, 1), (3, 2, 4), (2, 1, 0), (1, 0), (2, 0, 4), 
+                                            (3, 4, 0), (3, 4, 2), (2, 0), (4, 2, 1), (3, 2)]
+            self.taskname = self.taskname + '_missing_1_3'
+        if self.missing_1_5:
+            self.specific_training_leads =  [(0,), (3, 4), (0, 4, 2), (2, 3, 4, 1), (4, 3, 1, 0, 2), 
+                                             (4, 3, 1, 2, 0), (1, 0, 3), (4, 0, 1, 2), (4,), (1,), 
+                                             (3, 2, 0), (1, 3, 4, 0, 2), (2, 3), (4, 2, 0, 3, 1), (3,), 
+                                             (0, 3, 2), (2,), (0, 4), (3, 0, 4), (0, 1), 
+                                             (0, 4, 2, 1), (2, 4), (1, 2), (0, 2, 3, 1, 4), (3, 4, 1), 
+                                             (2, 1, 4), (1, 0), (4, 2, 0, 3), (0, 2, 4), (2, 0)]
+            self.taskname = self.taskname + '_missing_1_5'
+        if self.missing_3_5:
+            self.specific_training_leads =  [(1, 0, 4), (4, 1, 3, 0), (2, 1, 4, 0, 3), (3, 2, 0, 4, 1), (0, 1, 4, 3, 2), 
+                                             (4, 1, 2, 3, 0), (3, 4, 2), (1, 3, 4, 0), (4, 0, 2, 3, 1), (4, 0, 1, 2), 
+                                             (2, 0, 4, 1), (0, 2, 3), (4, 0, 3), (0, 1, 2), (2, 0, 3, 4), 
+                                             (2, 4, 3, 1), (1, 0, 2, 4, 3), (2, 4, 1, 3, 0), (4, 2, 3, 0), (1, 2, 0), 
+                                             (2, 3, 0, 4), (1, 0, 2), (2, 0, 3), (3, 0, 4), (3, 1, 4), 
+                                             (2, 1, 3, 4), (4, 1, 0, 2), (4, 2, 1, 0), (4, 3, 0, 2, 1), (2, 4, 1, 3)]
+            self.taskname = self.taskname + '_missing_3_5'
+
+        self.taskpath = os.path.join(self.task_rootpath, self.taskname)
 
     # def local_holdout(self, local_datas, shuffle=False):
     #     """split each local dataset into train data and valid data according the rate."""
@@ -320,29 +311,43 @@ class TaskGen(DefaultTaskGen):
     #     return train_cidxs, valid_cidxs
 
     def load_data(self):
-        self.train_data = PTBXL_REDUCE_Dataset(
+        self.train_data = EDFDataset(
             root=self.rawdata_path,
             download=True,
             standard_scaler=True,
-            train=True
+            train=True, 
         )
-        self.test_data = PTBXL_REDUCE_Dataset(
+        self.test_data = EDFDataset(
             root=self.rawdata_path,
             download=True,
             standard_scaler=True,
-            train=False
+            train=False,
         )
+    
+    # def local_holdout(self, local_datas, shuffle=False):
+    #     """split each local dataset into train data and valid data according the rate."""
+    #     train_cidxs = []
+    #     valid_cidxs = []
+    #     for local_data in local_datas:
+    #         if shuffle:
+    #             np.random.shuffle(local_data)
+    #         k = int(len(local_data) * (1-self.local_holdout_rate))
+    #         train_cidxs.append(local_data[:k])
+    #         valid_cidxs.append(local_data[k:])
+        
+    #     return train_cidxs, valid_cidxs
     
 class TaskCalculator(ClassificationCalculator):
     def __init__(self, device, optimizer_name='sgd'):
         super(TaskCalculator, self).__init__(device, optimizer_name)
-        self.n_leads = 12
+        self.n_leads = 7
         self.DataLoader = DataLoader
 
     def train_one_step(self, model, data, leads, contrastive_weight=0):
         """
         :param model: the model to train
         :param data: the training dataset
+        :param matrix: weight for adjacency matrix A
         :return: dict of train-one-step's result, which should at least contains the key 'loss'
         """
         tdata = self.data_to_device(data)
@@ -371,8 +376,11 @@ class TaskCalculator(ClassificationCalculator):
             # import pdb; pdb.set_trace()
             
             loss, outputs = model(batch_data[0], batch_data[-1], leads, contrastive_weight)
+
             total_loss += loss.item() * len(batch_data[-1])
+            cur_predict = torch.softmax(outputs, dim=1)
             predicts.extend(torch.argmax(torch.softmax(outputs, dim=1), dim=1).cpu().tolist())
+        
         labels = np.array(labels)
         predicts = np.array(predicts)
         accuracy = accuracy_score(labels, predicts)
@@ -380,7 +388,7 @@ class TaskCalculator(ClassificationCalculator):
             'loss': total_loss / len(dataset),
             'acc': accuracy
         }
-        
+    
     @torch.no_grad()
     def evaluate(self, model, dataset, leads, batch_size=64, num_workers=0):
         """
@@ -462,6 +470,7 @@ class TaskCalculator(ClassificationCalculator):
             #     result['loss_modal_combi'+str(test_combi_index+1)+'_modal'+str(i+1)] = loss_each_modal[i] / len(dataset)
             result['loss'+str(test_combi_index+1)] = total_loss / len(dataset)
             result['acc'+str(test_combi_index+1)] = accuracy
+            # print(leads[test_combi_index], total_loss, len(dataset))
         # return {
         #     'loss': total_loss / len(dataset),
         #     'acc': accuracy
