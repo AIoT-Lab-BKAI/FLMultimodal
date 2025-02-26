@@ -40,15 +40,16 @@ def take_least_combi(num_combi_test, ls_combi_train):
     
     
 if __name__ == '__main__':
-    min_ = 3
+    min_ = 1
     max_ = 5
+    num_cl = 50
     s = '' 
-    for _ in range(20):
-        ls = gen_list_modalities(min_,max_, 30)
+    for _ in range(40):
+        ls = gen_list_modalities(min_,max_, num_cl)
         s += '\nModalist: {}\n'.format(ls)
         for i in range(1,max_):
             max_num_exist, string = take_least_combi(i, ls)
             s += '{}'.format(i)
             s += '{}\n'.format(string)
-    with open('notebook/sleep_missing_{}_{}.txt'.format(min_, max_), 'a') as f :
+    with open('notebook/sleep_missing_{}_{}_{}cl.txt'.format(min_, max_, num_cl), 'a') as f :
         f.write(s)  

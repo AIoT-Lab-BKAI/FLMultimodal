@@ -78,6 +78,7 @@ def save_task(generator):
         'dtest': [i for i in range(len(generator.test_data))],
         'datasrc': generator.source_dict
     }
+    # import pdb; pdb.set_trace()
     for cid in range(len(generator.cnames)):
         if generator.specific_training_leads:
             # import pdb; pdb.set_trace()
@@ -91,6 +92,7 @@ def save_task(generator):
                 'dtrain': generator.train_cidxs[cid],
                 'dvalid': generator.valid_cidxs[cid]
             }
+    # import pdb; pdb.set_trace()
     with open(os.path.join(generator.taskpath, 'data.json'), 'w') as outf:
         ujson.dump(feddata, outf, default=convert)
     return
@@ -270,32 +272,71 @@ class TaskGen(DefaultTaskGen):
         self.missing_3_5 = missing_3_5
         self.specific_training_leads = None
         self.local_holdout_rate = 0.1
-
-        if self.missing_1_3:
-            self.specific_training_leads =  [(2,), (0, 2), (1, 0, 4), (2, 3), (4,), 
-                                            (2, 4), (3,), (0,), (1,), (4, 1), 
-                                            (1, 4, 0), (1, 2, 0), (4, 3), (4, 3, 0), (2, 1), 
-                                            (0, 3), (0, 4), (1, 4), (1, 4, 3), (4, 3, 2), 
-                                            (3, 1), (3, 2, 4), (2, 1, 0), (1, 0), (2, 0, 4), 
-                                            (3, 4, 0), (3, 4, 2), (2, 0), (4, 2, 1), (3, 2)]
-            self.taskname = self.taskname + '_missing_1_3'
-        if self.missing_1_5:
-            self.specific_training_leads =  [(0,), (3, 4), (0, 4, 2), (2, 3, 4, 1), (4, 3, 1, 0, 2), 
-                                             (4, 3, 1, 2, 0), (1, 0, 3), (4, 0, 1, 2), (4,), (1,), 
-                                             (3, 2, 0), (1, 3, 4, 0, 2), (2, 3), (4, 2, 0, 3, 1), (3,), 
-                                             (0, 3, 2), (2,), (0, 4), (3, 0, 4), (0, 1), 
-                                             (0, 4, 2, 1), (2, 4), (1, 2), (0, 2, 3, 1, 4), (3, 4, 1), 
-                                             (2, 1, 4), (1, 0), (4, 2, 0, 3), (0, 2, 4), (2, 0)]
-            self.taskname = self.taskname + '_missing_1_5'
-        if self.missing_3_5:
-            self.specific_training_leads =  [(1, 0, 4), (4, 1, 3, 0), (2, 1, 4, 0, 3), (3, 2, 0, 4, 1), (0, 1, 4, 3, 2), 
-                                             (4, 1, 2, 3, 0), (3, 4, 2), (1, 3, 4, 0), (4, 0, 2, 3, 1), (4, 0, 1, 2), 
-                                             (2, 0, 4, 1), (0, 2, 3), (4, 0, 3), (0, 1, 2), (2, 0, 3, 4), 
-                                             (2, 4, 3, 1), (1, 0, 2, 4, 3), (2, 4, 1, 3, 0), (4, 2, 3, 0), (1, 2, 0), 
-                                             (2, 3, 0, 4), (1, 0, 2), (2, 0, 3), (3, 0, 4), (3, 1, 4), 
-                                             (2, 1, 3, 4), (4, 1, 0, 2), (4, 2, 1, 0), (4, 3, 0, 2, 1), (2, 4, 1, 3)]
-            self.taskname = self.taskname + '_missing_3_5'
-
+        if num_clients == 30:
+            if self.missing_1_3:
+                self.specific_training_leads =  [(2,), (0, 2), (1, 0, 4), (2, 3), (4,), 
+                                                (2, 4), (3,), (0,), (1,), (4, 1), 
+                                                (1, 4, 0), (1, 2, 0), (4, 3), (4, 3, 0), (2, 1), 
+                                                (0, 3), (0, 4), (1, 4), (1, 4, 3), (4, 3, 2), 
+                                                (3, 1), (3, 2, 4), (2, 1, 0), (1, 0), (2, 0, 4), 
+                                                (3, 4, 0), (3, 4, 2), (2, 0), (4, 2, 1), (3, 2)]
+                self.taskname = self.taskname + '_missing_1_3'
+            if self.missing_1_5:
+                self.specific_training_leads =  [(0,), (3, 4), (0, 4, 2), (2, 3, 4, 1), (4, 3, 1, 0, 2), 
+                                                (4, 3, 1, 2, 0), (1, 0, 3), (4, 0, 1, 2), (4,), (1,), 
+                                                (3, 2, 0), (1, 3, 4, 0, 2), (2, 3), (4, 2, 0, 3, 1), (3,), 
+                                                (0, 3, 2), (2,), (0, 4), (3, 0, 4), (0, 1), 
+                                                (0, 4, 2, 1), (2, 4), (1, 2), (0, 2, 3, 1, 4), (3, 4, 1), 
+                                                (2, 1, 4), (1, 0), (4, 2, 0, 3), (0, 2, 4), (2, 0)]
+                self.taskname = self.taskname + '_missing_1_5'
+            if self.missing_3_5:
+                self.specific_training_leads =  [(1, 0, 4), (4, 1, 3, 0), (2, 1, 4, 0, 3), (3, 2, 0, 4, 1), (0, 1, 4, 3, 2), 
+                                                (4, 1, 2, 3, 0), (3, 4, 2), (1, 3, 4, 0), (4, 0, 2, 3, 1), (4, 0, 1, 2), 
+                                                (2, 0, 4, 1), (0, 2, 3), (4, 0, 3), (0, 1, 2), (2, 0, 3, 4), 
+                                                (2, 4, 3, 1), (1, 0, 2, 4, 3), (2, 4, 1, 3, 0), (4, 2, 3, 0), (1, 2, 0), 
+                                                (2, 3, 0, 4), (1, 0, 2), (2, 0, 3), (3, 0, 4), (3, 1, 4), 
+                                                (2, 1, 3, 4), (4, 1, 0, 2), (4, 2, 1, 0), (4, 3, 0, 2, 1), (2, 4, 1, 3)]
+                self.taskname = self.taskname + '_missing_3_5'
+        elif num_clients == 10:
+            if self.missing_1_5:
+                self.specific_training_leads =  [(0,), (0, 4), (2, 0, 3), (2, 1, 4, 3), (3, 0, 2, 4, 1), 
+                                                  (3, 4, 2, 0), (0, 2, 4, 1), (2, 0), (4, 1), (3, 1, 4, 2, 0)]
+                self.taskname = self.taskname + '_missing_1_5'
+            
+        elif num_clients == 20:
+            if self.missing_1_5:
+                self.specific_training_leads =  [(4,), (0, 2), (2, 4, 3), (4, 3, 2, 0), (2, 1, 4, 0, 3), 
+                                                 (4, 2), (2,), (4, 3), (0, 1, 4, 2), (1, 0, 3, 4, 2), 
+                                                 (0, 3, 1, 2, 4), (1, 0, 4), (4, 0, 1), (1, 4, 3, 2), (0, 3, 4), 
+                                                 (1, 4, 3), (3, 2, 0), (0, 1, 4, 2, 3), (2, 0, 3, 4), (0, 2, 4)]
+                self.taskname = self.taskname + '_missing_1_5'
+                
+        elif num_clients == 40:
+            if self.missing_1_5:
+                self.specific_training_leads =  [(3,), (2, 3), (2, 4, 1), (4, 1, 0, 3), (1, 4, 3, 2, 0), 
+                                                 (4, 0, 3), (0,), (2, 3, 4), (4, 2, 1, 0), (2,), 
+                                                 (4, 1), (0, 3, 4, 2), (4, 3, 0, 2), (2, 3, 4, 1, 0), (3, 0, 4, 1, 2), 
+                                                 (0, 2, 1, 3, 4), (1, 0, 2, 4), (0, 3), (0, 3, 1, 4, 2), (3, 2, 0), 
+                                                 (4,), (4, 3), (1, 0, 3, 2, 4), (3, 4, 2), (1,), 
+                                                 (1, 2, 3, 4, 0), (3, 4), (3, 2), (3, 4, 2, 1, 0), (4, 3, 1), 
+                                                 (1, 3, 0, 4, 2), (1, 2, 0, 3, 4), (2, 4, 0, 1), (1, 4), (4, 3, 2), 
+                                                 (2, 0, 1, 3, 4), (2, 3, 0, 4), (3, 1, 2), (4, 0), (0, 3, 2)]
+                self.taskname = self.taskname + '_missing_1_5'
+                
+        elif num_clients == 50:
+            if self.missing_1_5:
+                self.specific_training_leads =  [(3,), (2, 3), (3, 0, 4), (0, 4, 2, 1), (1, 2, 0, 3, 4), 
+                                                 (2, 1, 3, 4, 0), (0, 3, 2, 4, 1), (1, 2), (3, 1, 0, 4), (2, 4, 3), 
+                                                 (3, 2, 1, 0), (2, 1, 3, 4), (2, 0, 1), (1,), (4, 2, 3), 
+                                                 (1, 0, 2, 3, 4), (4, 0, 2, 3), (1, 0, 3, 4), (4, 2, 3, 1), (2, 0, 3, 4), 
+                                                 (4,), (2, 4, 1), (1, 4, 3), (0,), (4, 0, 1), 
+                                                 (2, 0, 4), (3, 2, 1, 0, 4), (0, 2), (4, 2, 1, 3, 0), (3, 2, 4), 
+                                                 (0, 2, 1, 3, 4), (2, 3, 1, 0), (1, 4, 0), (4, 0, 3, 2), (4, 1, 3, 2, 0), 
+                                                 (0, 4, 3), (1, 4, 2), (0, 3, 4), (3, 1, 4, 2, 0), (0, 4), 
+                                                 (4, 1, 3, 0, 2), (2, 0), (0, 3, 1, 2), (2, 1), (2, 0, 1, 4), 
+                                                 (2, 0, 4, 3), (2, 4, 0), (3, 2, 4, 0, 1), (2,), (4, 2)]
+                self.taskname = self.taskname + '_missing_1_5'
+                
         self.taskpath = os.path.join(self.task_rootpath, self.taskname)
 
     # def local_holdout(self, local_datas, shuffle=False):

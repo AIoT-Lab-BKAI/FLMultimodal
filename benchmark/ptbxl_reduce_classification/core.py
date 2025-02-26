@@ -29,10 +29,10 @@ class TaskPipe(IDXTaskPipe):
         valid_datas = []
         modalities_list = []
         for name in feddata['client_names']:
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             train_data = feddata[name]['dtrain']
             valid_data = feddata[name]['dvalid']
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             if cls._cross_validation:
                 k = len(train_data)
                 train_data.extend(valid_data)
